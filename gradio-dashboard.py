@@ -2,7 +2,13 @@ import pandas as pd
 import numpy as np
 from dotenv import load_dotenv
 
-from langchain_community.document_loaders import TextLoader
+####
+import os
+#####
+
+#from langchain_community.document_loaders import TextLoader
+from langchain_core.documents import Document
+
 from langchain_openai import OpenAIEmbeddings
 from langchain_text_splitters import CharacterTextSplitter
 from langchain_chroma import Chroma
@@ -10,6 +16,16 @@ from langchain_chroma import Chroma
 import gradio as gr
 
 load_dotenv()
+#####
+try:
+    with open("tagged_description.txt", encoding="utf-8") as f:
+        text = f.read()
+except UnicodeDecodeError:
+    with open("tagged_description.txt", encoding="iso-8859-1") as f:
+        text = f.read()
+
+raw_documents = [Document(page_content=text)]
+#####
 
 books = pd.read_csv("books_with_emotions.csv")
 
@@ -20,10 +36,28 @@ books["large_thumbnail"] = np.where(
     books["large_thumbnail"],
 )
 
-raw_documents = TextLoader("tagged_description.txt").load()
+#raw_documents = TextLoader("tagged_description.txt").load()
 text_splitter = CharacterTextSplitter(separator="\n", chunk_size=0, chunk_overlap=0)
 documents = text_splitter.split_documents(raw_documents)
-db_books = Chroma.from_documents(documents, OpenAIEmbeddings())
+#db_books = Chroma.from_documents(documents, OpenAIEmbeddings())
+
+
+persist_directory = "chroma_db"
+
+index_exists = os.path.exists(os.path.join(persist_directory, "index"))
+
+if index_exists:
+    db_books = Chroma(
+        persist_directory=persist_directory,
+        embedding_function=OpenAIEmbeddings()
+    )
+else:
+    db_books = Chroma.from_documents(
+        documents,
+        OpenAIEmbeddings(),
+        persist_directory=persist_directory
+    )
+
 
 
 def retrieve_semantic_recommendations(
@@ -85,8 +119,8 @@ def recommend_books(
 categories = ["All"] + sorted(books["simple_categories"].unique())
 tones = ["All"] + ["Happy", "Surprising", "Angry", "Suspenseful", "Sad"]
 
-with gr.Blocks(theme = gr.themes.Glass()) as dashboard:
-    gr.Markdown("# CMKA - Semantic book recommender")
+with gr.Blocks(theme = gr.themes.Glass(), title="Cyril Ayegbe - Semantic Book Recommender") as dashboard:
+    gr.Markdown("# Semantic book recommender")
 
     with gr.Row():
         user_query = gr.Textbox(label = "Please enter a description of a book:",
@@ -102,6 +136,6 @@ with gr.Blocks(theme = gr.themes.Glass()) as dashboard:
                         inputs = [user_query, category_dropdown, tone_dropdown],
                         outputs = output)
 
-
+#working
 if __name__ == "__main__":
     dashboard.launch()
